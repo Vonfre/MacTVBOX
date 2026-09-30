@@ -1,0 +1,80 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Core and protocol integration tests
+        run: |
+          python3 scripts/fixture-server.py > /tmp/mactvbox-fixtures.log 2>&1 &
+          FIXTURE_PID=$!
+          trap 'kill "$FIXTURE_PID"' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:18765/config >/dev/null; then break; fi
+            sleep 1
+          done
+          MACTVBOX_TEST_SERVER=http://127.0.0.1:18765 ./scripts/test.sh
+      - name: Release metadata tests
+        run: python3 -m unittest discover -s scripts/testing -p 'test_*.py' -v
+      - name: Build universal app
+        run: |
+          ARCHS='arm64 x86_64' ./scripts/build-app.sh
+          ditto -c -k --sequesterRsrc --keepParent build/MacTVBOX.app build/MacTVBOX-universal.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: universal-app-build
+          path: build/MacTVBOX-universal.zip
+          retention-days: 7
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build and sign release
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SPARKLE_PRIVATE_KEY" || { echo 'Missing SPARKLE_PRIVATE_KEY repository secret'; exit 1; }
+          umask 077
+          KEY_FILE="$(mktemp)"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
+          unset SPARKLE_PRIVATE_KEY
+          SPARKLE_PRIVATE_KEY_FILE="$KEY_FILE" ./scripts/package-release.sh "$GITHUB_REF_NAME"
+      - name: Publish complete release atomically
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Never mutate assets of an already published release. On retry, only
+          # resume an existing draft, so latest/download never sees a partial feed.
+          if gh release view "$GITHUB_REF_NAME" --json isDraft >/tmp/release.json 2>/dev/null; then
+            python3 -c 'import json; assert json.load(open("/tmp/release.json"))["isDraft"], "Release is already published; bump the version instead"'
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+              --title "MacTVBOX ${GITHUB_REF_NAME#v}" \
+              --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+          fi
+          gh release upload "$GITHUB_REF_NAME" --clobber \
+            build/release/MacTVBOX-*-universal.zip build/release/appcast.xml build/release/SHA256SUMS
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
