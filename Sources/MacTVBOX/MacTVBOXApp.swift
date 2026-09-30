@@ -123,7 +123,7 @@ struct MainView: View {
             HStack {
                 Text("仅在本机保存资料")
                 Spacer()
-                Text("0.5.2")
+                Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版")
             }.font(.system(size: 9)).foregroundStyle(Theme.muted).padding(.horizontal, 22).padding(.top, 20).padding(.bottom, 22)
         }.background(Theme.sidebar)
     }

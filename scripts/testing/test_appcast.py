@@ -67,6 +67,16 @@ class AppcastTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.feed()
 
+    def test_sidebar_version_comes_from_bundle_metadata(self):
+        source = (ROOT / 'Sources/MacTVBOX/MacTVBOXApp.swift').read_text()
+        self.assertIn(
+            'Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版")',
+            source,
+        )
+        # Never allow a release number to be hard-coded into a SwiftUI Text label.
+        for swift_file in (ROOT / 'Sources/MacTVBOX').glob('*.swift'):
+            self.assertNotRegex(swift_file.read_text(), r'Text\(\s*"v?\d+\.\d+\.\d+"', str(swift_file))
+
     def test_production_update_security_defaults(self):
         for key in ('SUEnableAutomaticChecks', 'SUAutomaticallyUpdate',
                     'SUVerifyUpdateBeforeExtraction', 'SURequireSignedFeed'):

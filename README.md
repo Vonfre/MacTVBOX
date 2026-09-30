@@ -1,16 +1,18 @@
-# MacTVBOX · 0.6.0
+# MacTVBOX · 0.6.1
 
 SwiftUI + AVKit 原生 macOS 点播客户端。**先找影片，再选来源**，不需要先切换片源。无需 Electron、无需安装 VLC 才能使用内置播放器。
 
-## 下载与自动更新（0.6.0）
+## 下载与自动更新（0.6.1）
 
-[下载最新 Release](https://github.com/Vonfre/MacTVBOX/releases/latest) · [0.6.0 发布说明](docs/releases/v0.6.0.md)
+[下载最新 Release](https://github.com/Vonfre/MacTVBOX/releases/latest) · [0.6.1 发布说明](docs/releases/v0.6.1.md)
 
-- 下载 `MacTVBOX-0.6.0-universal.zip`，解压并将应用拖入「应用程序」。包含 Apple Silicon / Intel 两种架构，要求 macOS 13+；实际运行验证在 Apple Silicon 完成。
+- 下载 `MacTVBOX-0.6.1-universal.zip`，解压并将应用拖入「应用程序」。包含 Apple Silicon / Intel 两种架构，要求 macOS 13+；实际运行验证在 Apple Silicon 完成。
 - **默认自动检查、下载，并在退出时自动安装**，不强制打断播放。启动时检查，运行期间每小时检查；菜单「MacTVBOX → 检查更新… / 自动更新」可以手动检查、查看状态或关闭自动更新。
 - 更新订阅与 ZIP 均通过 Ed25519 签名验证；失败时保留旧应用，不触碰收藏、片源和播放历史。
-- **0.5.2 及更早版本须手动安装一次 0.6.0**，之后才能自动接收后续 Release。
+- **0.5.2 及更早版本须手动安装一次 0.6.1**，之后才能自动接收后续 Release。
 - 本版仍为 ad-hoc 签名，**尚未 Apple Developer ID 公证**；首次打开可能需要在 macOS「隐私与安全性」中允许。更新签名不等于 Apple 公证，不要关闭系统安全检查。
+
+0.6.1 修复了 0.6.0 侧栏误显示为 0.5.2 的问题，版本文字现直接读取应用的 Info.plist。0.6.0 用户无需重新手动安装，可通过自动更新获得修复。
 
 构建、更新安全设计和后续发布流程见 [自动更新说明](docs/UPDATES.md)。
 
