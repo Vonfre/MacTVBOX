@@ -63,7 +63,7 @@ import MacTVBOXCore
         if let data = defaults.data(forKey: "player.titleSkips"), let saved = try? JSONDecoder().decode([String: PlaybackSkipSettings].self, from: data) { skipLibrary = saved }
         player.volume = Float(volume)
         periodicObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+            Task { @MainActor [weak self] in self?.tick() }
         }
     }
     var canShowDetails: Bool { currentSource?.key != "direct" && currentVideo != nil }
@@ -131,7 +131,7 @@ import MacTVBOXCore
         let asset = AVURLAsset(url: url, options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
         let item = AVPlayerItem(asset: asset)
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.player.currentItem === item else { return }
                 if item.status == .failed {
                     self.error = "无法播放：\(item.error?.localizedDescription ?? "不支持的媒体格式")\n请重试或选择其他线路。"
@@ -148,14 +148,14 @@ import MacTVBOXCore
             }
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.player.currentItem === item else { return }
                 self.finishEpisode()
             }
         }
         failureObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] notification in
             let message = (notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription ?? "媒体连接已中断。"
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.player.currentItem === item else { return }
                 self.error = message; self.pause(); self.isBuffering = false
             }
@@ -191,7 +191,7 @@ import MacTVBOXCore
         item.cancelPendingSeeks()
         seeking = true; position = value; hasEnded = false; finishing = false
         player.seek(to: CMTime(seconds: value, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.player.currentItem === item, finished else { return }
                 self.seeking = false
                 if self.wantsPlayback { self.player.playImmediately(atRate: self.rate) }
@@ -262,7 +262,8 @@ import MacTVBOXCore
     func openVLC() {
         guard let url = currentURL, let app = vlcApplication else { return }
         NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) { _, error in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
                 if let error { self.externalPlayerMessage = error.localizedDescription }
                 else if self.currentURL == url { self.pause() }
             }

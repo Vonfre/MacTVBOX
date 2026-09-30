@@ -30,7 +30,7 @@ import SwiftUI
         setFullScreen(window.styleMask.contains(.fullScreen))
         for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self, weak window] _ in
-                Task { @MainActor in
+                Task { @MainActor [weak self, weak window] in
                     guard let self, let window else { return }
                     self.setFullScreen(window.styleMask.contains(.fullScreen))
                 }
@@ -112,7 +112,7 @@ struct PlayerWindowReader: NSViewRepresentable {
         let view = Reader()
         view.onWindow = { [weak chrome] window in
             // Avoid publishing changes during SwiftUI's representable update.
-            Task { @MainActor in chrome?.attach(window) }
+            Task { @MainActor [weak chrome] in chrome?.attach(window) }
         }
         return view
     }

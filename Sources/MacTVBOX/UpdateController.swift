@@ -20,13 +20,13 @@ final class UpdateController: NSObject, ObservableObject, SPUUpdaterDelegate {
         let updater = controller.updater
         observations = [
             updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] _, change in
-                DispatchQueue.main.async { self?.canCheckForUpdates = change.newValue ?? false }
+                DispatchQueue.main.async { [weak self] in self?.canCheckForUpdates = change.newValue ?? false }
             },
             updater.observe(\.automaticallyChecksForUpdates, options: [.initial, .new]) { [weak self] _, change in
-                DispatchQueue.main.async { self?.automaticallyChecks = change.newValue ?? false }
+                DispatchQueue.main.async { [weak self] in self?.automaticallyChecks = change.newValue ?? false }
             },
             updater.observe(\.automaticallyDownloadsUpdates, options: [.initial, .new]) { [weak self] _, change in
-                DispatchQueue.main.async { self?.automaticallyInstalls = change.newValue ?? false }
+                DispatchQueue.main.async { [weak self] in self?.automaticallyInstalls = change.newValue ?? false }
             }
         ]
     }
