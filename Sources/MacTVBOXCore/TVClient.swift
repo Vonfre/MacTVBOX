@@ -2,6 +2,8 @@ import Foundation
 
 public final class TVClient {
     private let session: URLSession
+    let guaziSessions = GuaziSessions()
+    let nativeMetadata = NativeMetadataCache()
     public init(session: URLSession? = nil) {
         if let session { self.session = session }
         else {
@@ -20,6 +22,14 @@ public final class TVClient {
     public func browse(source: Source, category: String? = nil, page: Int = 1, query: String? = nil) async throws -> VideoPage {
         guard source.isSupported else { throw TVError.message(source.compatibilityNote) }
         if source.usesHTTPSpider { return try await HTTPSpiderProvider(client: self, source: source).browse(category: category, page: page, query: query) }
+        if source.nativeSpider == .jianpian { return try await JianpianProvider(client: self, source: source).browse(category: category, page: page, query: query) }
+        if source.nativeSpider == .guazi { return try await GuaziProvider(client: self, source: source).browse(category: category, page: page, query: query) }
+        if source.nativeSpider == .bili { return try await BiliSpiderProvider(client: self, source: source).browse(category: category, page: page, query: query) }
+        if source.nativeSpider == .dm84 { return try await Dm84SpiderProvider(client: self, source: source).browse(category: category, page: page, query: query) }
+        if let kind = source.nativeSpider, PublicWebSpiderProvider.kinds.contains(kind) { return try await PublicWebSpiderProvider(client: self, source: source).browse(category: category, page: page, query: query) }
+        if source.nativeSpider == .jpys { return try await JpysSpiderProvider(client: self, source: source).browse(category: category, page: page, query: query) }
+        if source.nativeSpider == .kugou { return try await KugouSpiderProvider(client: self).browse(category: category, page: page, query: query) }
+        if source.nativeSpider == .appRJ || source.nativeSpider == .appQi { return try await LegacyAppSpiderProvider(client: self, source: source).browse(category: category, page: page, query: query) }
         if source.isAppGet { return try await AppGetProvider(client: self, source: source).browse(category: category, page: page, query: query) }
         var parameters = ["ac": source.type == 0 ? "videolist" : "detail", "pg": String(page)]
         if let category, !category.isEmpty { parameters["t"] = category }
@@ -31,6 +41,14 @@ public final class TVClient {
     public func detail(source: Source, id: String) async throws -> Video {
         guard source.isSupported else { throw TVError.message(source.compatibilityNote) }
         if source.usesHTTPSpider { return try await HTTPSpiderProvider(client: self, source: source).detail(id: id) }
+        if source.nativeSpider == .jianpian { return try await JianpianProvider(client: self, source: source).detail(id: id) }
+        if source.nativeSpider == .guazi { return try await GuaziProvider(client: self, source: source).detail(id: id) }
+        if source.nativeSpider == .bili { return try await BiliSpiderProvider(client: self, source: source).detail(id: id) }
+        if source.nativeSpider == .dm84 { return try await Dm84SpiderProvider(client: self, source: source).detail(id: id) }
+        if let kind = source.nativeSpider, PublicWebSpiderProvider.kinds.contains(kind) { return try await PublicWebSpiderProvider(client: self, source: source).detail(id: id) }
+        if source.nativeSpider == .jpys { return try await JpysSpiderProvider(client: self, source: source).detail(id: id) }
+        if source.nativeSpider == .kugou { return try await KugouSpiderProvider(client: self).detail(id: id) }
+        if source.nativeSpider == .appRJ || source.nativeSpider == .appQi { return try await LegacyAppSpiderProvider(client: self, source: source).detail(id: id) }
         if source.isAppGet { return try await AppGetProvider(client: self, source: source).detail(id: id) }
         let url = try URLTools.apiURL(source.api, parameters: ["ac": source.type == 0 ? "videolist" : "detail", "ids": id])
         let (data, finalURL) = try await fetch(url)
@@ -40,6 +58,14 @@ public final class TVClient {
     }
     public func resolve(source: Source, episode: Episode) async throws -> ResolvedMedia {
         if source.usesHTTPSpider { return try await HTTPSpiderProvider(client: self, source: source).resolve(episode) }
+        if source.nativeSpider == .jianpian { return try JianpianProvider(client: self, source: source).resolve(episode) }
+        if source.nativeSpider == .guazi { return try await GuaziProvider(client: self, source: source).resolve(episode) }
+        if source.nativeSpider == .bili { return try await BiliSpiderProvider(client: self, source: source).resolve(episode) }
+        if source.nativeSpider == .dm84 { return try await Dm84SpiderProvider(client: self, source: source).resolve(episode) }
+        if let kind = source.nativeSpider, PublicWebSpiderProvider.kinds.contains(kind) { return try await PublicWebSpiderProvider(client: self, source: source).resolve(episode) }
+        if source.nativeSpider == .jpys { return try await JpysSpiderProvider(client: self, source: source).resolve(episode) }
+        if source.nativeSpider == .kugou { return try await KugouSpiderProvider(client: self).resolve(episode) }
+        if source.nativeSpider == .appRJ || source.nativeSpider == .appQi { return try await LegacyAppSpiderProvider(client: self, source: source).resolve(episode) }
         if source.isAppGet { return try await AppGetProvider(client: self, source: source).resolve(episode) }
         return ResolvedMedia(url: try URLTools.httpURL(episode.address), headers: [:])
     }
@@ -51,7 +77,7 @@ public final class TVClient {
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw TVError.message("服务器返回 HTTP \(code)。请检查地址或稍后重试。")
+            throw HTTPFailure(statusCode: code)
         }
         guard response.expectedContentLength <= limit else { throw TVError.message("服务器返回内容过大，已中止。") }
         var data = Data()

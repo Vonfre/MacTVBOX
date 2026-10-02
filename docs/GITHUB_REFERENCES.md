@@ -1,6 +1,6 @@
 # GitHub 架构参考记录 · 2026-09-30
 
-以下是阅读和架构参考，不代表已集成这些完整项目。未下载/执行第三方 Android 插件；未将所读实现复制进发布源码。
+以下按历史阶段记录阅读和架构参考，不代表集成完整项目。开发过程中曾在私有 Android 环境实测插件，现已改为原生协议并移除该环境；未将所读 GPL 实现复制进应用源码。
 
 ## 用户指定：FongMi/TV
 
@@ -28,7 +28,7 @@ MacTVBOX 的对应实现：
 - https://github.com/yaolin-dev/OKVideoMac — GPL-3.0。SwiftUI/AppKit、mpv、QuickJS/Node 与可选 Android Dex bridge；重型运行时并未安装或集成。
 - https://github.com/heroaku/TVboxo/blob/main/Py/app/getapp.py — 阅读公开 AppGet 通信协议后独立实现 Swift HTTP/AES 适配；未复制/分发其 Python 实现，未移植 OCR/验证码自动处理。
 
-临时研究材料位于被 Git 忽略的 `build/research/`，不是应用资源或发布物。
+临时研究材料曾保存在被 Git 忽略的目录，现已清理；不是应用资源或发布物。
 
 ## 0.4.0 HTTP 运行时桥接参考
 
@@ -49,3 +49,23 @@ MacTVBOX 的对应实现：
 - `app/src/leanback/java/com/fongmi/android/tv/ui/activity/VodActivity.java`：Android 播放页面组织。
 
 本版独立重写为 SwiftUI `PlayerPage`、`AVPlayerLayer` 和 `PlayerController`，使用 AVFoundation 实际 HLS variants 提供分辨率上限。没有复制或链接上述 Java 实现，也不声称与 Android 播放功能完全一致。
+
+## 0.6.2 原生 Spider 协议
+
+- 阅读 FongMi/CatVodSpider 的 `app/src/main/java/com/github/catvod/spider/Bili.java`，用于理解官方 HTTP API、分P、登录与 DASH 代理的边界。未复制/链接该 Java 实现；原生 Swift 实现只包含本轮验证的公开单文件 MP4 流程。
+- 当前用户订阅的 JAR 容器经检查内含 `classes.dex`，不是普通 JVM class 集合。早期 Android 验证曾执行该容器，当前原生版不执行、不分发它。
+- 动漫84适配依据站点实际 HTML / JSON / POST 通信实现，不加载广告脚本或移植第三方爬虫源码。
+- 研究快照已清理。所有状态与验证边界见 `SPIDER_COMPATIBILITY.md`。
+
+## 0.6.2 轻量原生迁移 · 2026-10-02
+
+开发中曾独立实现 Android companion 验证插件，现按用户要求删除该实现、模拟器生命周期管理、APK资源和本机专用运行环境，不作为最终架构保留。
+
+荐片和瓜子的协议依据用户订阅插件的静态协议分析及实际HTTP响应，重新实现为 Swift `JianpianProvider` / `GuaziProvider`。运行时仅依赖 Foundation、CommonCrypto、Security 和 AVFoundation；不加载下载的可执行代码。保留的协议常量用于兼容站点线协议，不是用户账号凭据。没有将反编译源码、JAR、JADX或Java运行时打进应用。
+
+这不是FongMi播放引擎的移植，也不意味着所有CatVod插件可兼容。研究过程的独立实现说明不能替代正式分发前的授权、安全和许可审查。本地开发版未发布Release。当前覆盖与实测见 `SPIDER_COMPATIBILITY.md`、`V0_6_2_VALIDATION.md`。
+
+
+## 本轮原生入口扩展（2026-10-02）
+
+新增Jpys、AppRJ、AppQi及五种专项公开内容入口。实现依据订阅线协议静态分析和站点当前公开HTTP/HTML/JSON响应，未捆绑插件可执行代码或反编译源码。Jpys按响应的访客权限筛选清晰度，体育线路缺失权限字段时拒绝；没有绕过登录、验证码、付费或DRM。未声称FongMi的Android框架已移植；仍为本项目的Swift/AVFoundation实现。详见SPIDER_COMPATIBILITY.md及V0_6_2_VALIDATION.md。

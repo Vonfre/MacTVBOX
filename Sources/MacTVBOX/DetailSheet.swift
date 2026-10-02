@@ -70,8 +70,10 @@ struct DetailSheet: View {
             }
         }
         .frame(width: 850, height: 740).background(Theme.background).preferredColorScheme(.dark)
-        .onChange(of: store.detailSource?.id) { _ in selectedLine = 0 }
-        .onChange(of: store.detailVideo?.id) { _ in selectedLine = 0 }
+        .onAppear { selectedLine = store.detailVideo?.preferredLineIndex ?? 0 }
+        .onChange(of: store.detailSource?.id) { _ in selectedLine = store.detailVideo?.preferredLineIndex ?? 0 }
+        .onChange(of: store.detailVideo?.id) { _ in selectedLine = store.detailVideo?.preferredLineIndex ?? 0 }
+        .onChange(of: store.detailVideo?.lines) { _ in selectedLine = store.detailVideo?.preferredLineIndex ?? 0 }
     }
     private func sourceMatches(_ anchor: Video) -> some View {
         VStack(alignment: .leading, spacing: 12) {

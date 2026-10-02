@@ -45,7 +45,7 @@ public enum ConfigurationParser {
         }
         guard !sources.isEmpty else { throw TVError.message("配置中没有有效的源。") }
         if sources.allSatisfy({ !$0.isSupported }) {
-            warnings.append("当前配置没有原生支持的 JSON / XML 源。导入成功不代表其中的 Spider 插件可在 macOS 上运行。")
+            warnings.append("当前配置没有已适配的原生协议或有效 HTTP 运行时接口。导入成功不代表其中的 Spider 插件可在 macOS 上运行。")
         }
         return TVConfiguration(sources: sources, spider: root["spider"] as? String, warnings: warnings)
     }

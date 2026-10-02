@@ -1,18 +1,32 @@
-# MacTVBOX · 0.6.1
+# MacTVBOX · 0.6.2
 
 SwiftUI + AVKit 原生 macOS 点播客户端。**先找影片，再选来源**，不需要先切换片源。无需 Electron、无需安装 VLC 才能使用内置播放器。
 
-## 下载与自动更新（0.6.1）
+## 0.6.2 轻量原生片源适配
 
-[下载最新 Release](https://github.com/Vonfre/MacTVBOX/releases/latest) · [0.6.1 发布说明](docs/releases/v0.6.1.md)
+- **移除 Android 环境**：不再下载模拟器、启动 AVD、安装 APK 或执行远程 JAR/DEX；不需要 JVM、Node 或后台桥接服务。
+- **荐片、瓜子改为 Swift 原生协议**：直接完成首页、分类、搜索、详情、选集和媒体解析。瓜子的游客会话、请求签名与加密使用 macOS 系统库，会话只保存在内存。
+- 两个源都用生产 `PlayerController` 完成实际视频帧解码、跳至 90 秒、暂停、下一集、上一集验证；测试时没有 Android 进程。不是只检查 HTTP 200 或播放地址。
+- 瓜子按上游实际提供的清晰度生成线路；荐片只保留受支持的 HTTP 媒体，不把 FTP/P2P 当成可播放视频。
+- 当前39条配置入口中，**23条原生协议入口**。在原15条基础上新增Jpys、AppRJ、AppQi、YGP、FirstAid、Kugou、Kanqiu、兔小贝；新增8条均有至少一个样本实际解码通过。剩余8条待原生适配、5条网盘、3条工具。**协议支持数不等于全库播放成功数。**
+- Jpys另已通过生产播放器跳转90秒、暂停、上下集与恢复进度测试；登录限定清晰度不使用。AppQi搜索当前HTTP404，可从「片源管理 → 浏览内容」分类选片。
+- 增加按源目录/分类/分页入口，但主发现流程仍然先选影片再查源；正片、预告片、音乐、体育、科普和儿童内容分开匹配。
+- 旧 Android 临时映射自动忽略，收藏和观看进度保留；用户明确配置的外部 HTTP 服务仍保留。不把未移植的插件标记为可用。
+- 保留应用内播放器、单行控制栏、方向键快进、全屏延时隐藏、片头片尾、自动下一集、批量历史管理。
 
-- 下载 `MacTVBOX-0.6.1-universal.zip`，解压并将应用拖入「应用程序」。包含 Apple Silicon / Intel 两种架构，要求 macOS 13+；实际运行验证在 Apple Silicon 完成。
+详见 [Spider 接入清单](docs/SPIDER_COMPATIBILITY.md) 与 [0.6.2 验证](docs/V0_6_2_VALIDATION.md)。通用安装包与签名自动更新订阅由 GitHub Actions 发布，详见 [0.6.2 发布说明](docs/releases/v0.6.2.md)。
+
+## 下载与自动更新（0.6.2）
+
+[下载最新 Release](https://github.com/Vonfre/MacTVBOX/releases/latest) · [0.6.2 发布说明](docs/releases/v0.6.2.md)
+
+- 下载 `MacTVBOX-0.6.2-universal.zip`，解压并将应用拖入「应用程序」。包含 Apple Silicon / Intel 两种架构，要求 macOS 13+；实际运行验证在 Apple Silicon 完成。
 - **默认自动检查、下载，并在退出时自动安装**，不强制打断播放。启动时检查，运行期间每小时检查；菜单「MacTVBOX → 检查更新… / 自动更新」可以手动检查、查看状态或关闭自动更新。
 - 更新订阅与 ZIP 均通过 Ed25519 签名验证；失败时保留旧应用，不触碰收藏、片源和播放历史。
-- **0.5.2 及更早版本须手动安装一次 0.6.1**，之后才能自动接收后续 Release。
+- **0.5.2 及更早版本须手动安装一次 0.6.2**，之后才能自动接收后续 Release。
 - 本版仍为 ad-hoc 签名，**尚未 Apple Developer ID 公证**；首次打开可能需要在 macOS「隐私与安全性」中允许。更新签名不等于 Apple 公证，不要关闭系统安全检查。
 
-0.6.1 修复了 0.6.0 侧栏误显示为 0.5.2 的问题，版本文字现直接读取应用的 Info.plist。0.6.0 用户无需重新手动安装，可通过自动更新获得修复。
+已安装0.6.0/0.6.1的用户可直接检查更新至0.6.2；收藏、片源及观看历史保留。0.6.1对侧栏版本显示的修复继续保留，版本文字读取应用Info.plist。
 
 构建、更新安全设计和后续发布流程见 [自动更新说明](docs/UPDATES.md)。
 
@@ -30,17 +44,17 @@ SwiftUI + AVKit 原生 macOS 点播客户端。**先找影片，再选来源**�
 
 ## 已有功能（0.4.0）
 
-- **运行时桥接**：支持 TVBox type=4 / drpy-node 风格 HTTP 单源接口；原有 Spider / JS 源可在「片源管理 → 连接运行时」映射到受信任服务。仍然先选影片，再聚合搜索来源。
+- **运行时桥接**：支持 TVBox type=4 / drpy-node 风格 HTTP 单源接口；原有 Spider / JS 源可在「片源管理 → 外部服务」映射到受信任服务。仍然先选影片，再聚合搜索来源。
 - **双推荐来源**：豆瓣电影、剧集、综艺、动漫；烂番茄流媒体电影、院线电影、热门剧集。分别展示评分 / 新鲜度，不混为一个排行。
 - **卡片媒体库**：最近播放与收藏改为自适应卡片；最近播放显示上次集数、观看时间，选集区域独立滚动。
 - **批量管理**：多选、全选、删除确认；删除正在播放的历史后，不会被定时进度保存立即加回，直到再次主动播放。
 - 延续深灰 / 鼠尾草绿主题、整块点击热区、统一圆角及悬停反馈。
 
-**没有内置 Android、JVM、Node 或 JS 执行引擎。** 桥接需要你已有或自行部署的兼容服务，不代表原先未支持的源已自动全部可用。详见 [运行时接入说明](docs/RUNTIME_BRIDGE.md) 与 [本轮验证](docs/V0_4_VALIDATION.md)。
+0.6.2 保留可选的手动 HTTP 服务连接，但内置片源直接在 Mac 运行，不依赖服务。Android 兼容环境已移除，未加入 JS / Node 规则执行器。详见 [HTTP 接口说明](docs/RUNTIME_BRIDGE.md)。
 
 ## 本版使用流程
 
-1. 打开「发现」，选择**豆瓣或烂番茄公开片单**。豆瓣包含热门电影、热播剧集、热门综艺、热门动漫；烂番茄包含流媒体热门电影、院线电影、热门剧集。每栏标注来源、获取时间，提供原网页链接。保留来源顺序，不宣称是全网实时播放量排行。
+1. 无需安装运行环境，直接打开「发现」，选择**豆瓣或烂番茄公开片单**。豆瓣包含热门电影、热播剧集、热门综艺、热门动漫；烂番茄包含流媒体热门电影、院线电影、热门剧集。每栏标注来源、获取时间，提供原网页链接。保留来源顺序，不宣称是全网实时播放量排行。
 2. 点击影片，自动按片名搜索配置中已适配且开放搜索的片源，逐个显示命中结果。
 3. 在影片详情选择来源 → 线路 → 剧集，使用内置 AVPlayer 播放。同一来源的其他记录放在「其他版本」菜单；近似片名、年份冲突另行折叠，需人工核对。
 4. 顶部搜索栏可跨片源搜索。同名且年份一致的结果合并为影片卡片，标明来源数量。年份未知、不同季度/版本不会盲目合并。
@@ -50,9 +64,9 @@ SwiftUI + AVKit 原生 macOS 点播客户端。**先找影片，再选来源**�
 
 ## 兼容状态
 
-2026-09-30 的用户配置快照有 **39 个 type=3 源，其中 6 个 AppGet 协议已原生适配**：肥猫、干饭、一碗、蔬菜、方舟、番薯。其余 33 个包含其他协议、Android/JS 插件、网盘以及工具入口，仍未原生适配；本版可为其中适合的源连接外部 HTTP 运行时，但未逐个验证这些插件。数量随上游配置变化。
+2026-10-02 的用户配置快照有 **39个type=3入口，23个已适配原生协议**；剩余8个待适配、5个网盘、3个工具/元数据。兔小贝是精确配置的原生替代，不代表通用JS支持。数量随上游配置变化；协议适配不代表站点全部在线或所有视频都可播放。
 
-- 支持苹果 CMS 风格 JSON / XML、TVBox JSON/JSONC 配置、`csp_AppGet`，以及 TVBox HTTP type=4 / 单源运行时映射的分类、搜索、详情和播放解析。
+- 支持苹果 CMS 风格 JSON / XML、TVBox JSON/JSONC 配置、`csp_AppGet`、`csp_Bili`、`csp_Dm84`、`csp_Jianpian`、`csp_Gz360`，本轮新增8个适配（详见接入清单），以及 TVBox HTTP type=4 / 单源运行时映射的分类、搜索、详情和播放解析。
 - HTTP 运行时必须返回 `parse=0` 的媒体直链；网页嗅探 / 二次解析响应会明确报错，不会作为可播放媒体交给播放器。
 - AppGet 采用独立 Swift HTTP/AES 实现，不下载或执行远程 JAR、DEX、JavaScript。验证码、登录、次数限制不会绕过。
 - 已实测部分一碗、蔬菜媒体的原生视频帧解码，但也出现过 TLS 错误、403、额度提示视频和广告。**不能保证任一站点或全部线路持续可用**。
@@ -85,6 +99,12 @@ open build/MacTVBOX.app
 DiscoveryCatalog / RottenTomatoes      双来源公开片单与匹配规则（不含播放地址）
 AppStore                               影片聚合、跨源检索、取消/请求代次、状态
 TVClient / AppGetProvider / VODParser   原生片源浏览、搜索、详情与协议解析
+JianpianProvider / GuaziProvider        原生荐片 / 瓜子协议、会话与清晰度线路
+BiliSpiderProvider / Dm84SpiderProvider 原生 B站 / 动漫84 HTTP 协议
+JpysSpiderProvider / LegacyAppSpiderProvider  Jpys / AppRJ / AppQi 原生协议
+PublicWebSpiderProvider / KugouSpiderProvider 专项公开目录/视频/MV
+SourceCatalogSheet                    可选按源目录、分类、搜索、分页
+SourcePersistence                     旧临时桥接映射迁移，保留历史与外部服务
 HTTPSpiderProvider                    type=4 / 外部运行时单源 HTTP 协议
 LibraryView / LibrarySupport           卡片、批量管理、删除后的进度写入保护
 PlayerController / PlayerPage         地址解析、播放状态机、自定义主窗口播放页
@@ -122,4 +142,22 @@ MACTVBOX_TEST_SERVER=http://127.0.0.1:18765 ./scripts/test.sh
 
 无 XCTest 的 CLT 使用本仓库断言运行器执行相同测试体，不把跳过当作通过。播放器集成测试：`./scripts/test-player.sh`（合成本地视频 + 生产控制器，不读写真实用户媒体库）；`MACTVBOX_LIVE_HLS=1` 可额外验证 Apple 公开 HLS 档位。
 
-本轮结果见 `docs/V0_5_1_VALIDATION.md`；0.5.0 结果见 `docs/V0_5_VALIDATION.md`；0.4.0 结果见 `docs/V0_4_VALIDATION.md`；早期媒体验证和限制见 `docs/VALIDATION.md`、`docs/COMPATIBILITY.md`。`build/research` 是忽略的临时验证材料，可能含签名地址或配置令牌，不应分发。
+本轮结果见 `docs/V0_6_2_VALIDATION.md`；早期结果见 `docs/V0_5_1_VALIDATION.md`；0.5.0 结果见 `docs/V0_5_VALIDATION.md`；0.4.0 结果见 `docs/V0_4_VALIDATION.md`；早期媒体验证和限制见 `docs/VALIDATION.md`、`docs/COMPATIBILITY.md`。旧研究快照和签名地址样本已清理；当前不含凭据的验证日志保存在被忽略的 `build/native-migration/` 和 `build/native-expansion/`。
+
+原生荐片 / 瓜子在线完整播放测试（显式联网，使用隔离内存资料库，不改用户收藏/历史）：
+
+```bash
+MACTVBOX_LIVE_NATIVE=1 scripts/test-native-playback.sh jianpian
+MACTVBOX_LIVE_NATIVE=1 scripts/test-native-playback.sh guazi
+```
+
+新增原生入口解码测试（显式联网、静音、无媒体文件落盘）：
+
+```bash
+MACTVBOX_LIVE_SPIDER=1 scripts/test-native-expansion-playback.sh
+# Jpys / AppRJ / AppQi 使用含 sources 字段的 TVConfiguration 离线快照，非原始 sites 配置：
+MACTVBOX_LIVE_SPIDER=1 MACTVBOX_NATIVE_CONFIG=/absolute/path/config.json scripts/test-native-expansion-playback.sh
+MACTVBOX_LIVE_NATIVE=1 MACTVBOX_NATIVE_CONFIG=/absolute/path/config.json scripts/test-native-playback.sh jpys
+```
+
+可设 `MACTVBOX_SOURCE_FILTER=csp_AppQi` 仅检查一路。私密配置不随项目分发，不要上传凭据或签名媒体地址。失败会返回非零退出码，未设显式联网开关不会访问上游。

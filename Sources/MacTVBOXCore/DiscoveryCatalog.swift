@@ -148,7 +148,7 @@ public enum TitleMatcher {
     public static func groups(_ hits: [SourceMatch]) -> [TitleGroup] {
         var groups: [TitleGroup] = [], indices: [String: Int] = [:], seen = Set<String>()
         for hit in hits where seen.insert(hit.id).inserted {
-            let key = key(hit.video)
+            let key = hit.source.contentRole.rawValue + "|" + key(hit.video)
             if let index = indices[key] { groups[index].matches.append(hit) }
             else { indices[key] = groups.count; groups.append(TitleGroup(id: key, video: hit.video, matches: [hit])) }
         }

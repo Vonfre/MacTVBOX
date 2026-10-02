@@ -8,8 +8,8 @@
     <key>CFBundleExecutable</key><string>MacTVBOX</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.6.1</string>
-    <key>CFBundleVersion</key><string>10</string>
+    <key>CFBundleShortVersionString</key><string>0.6.2</string>
+    <key>CFBundleVersion</key><string>11</string>
     <key>SUFeedURL</key><string>https://github.com/Vonfre/MacTVBOX/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key><string>zR6zkH9/T8EC6GLBRBU0YStZe/BSqGn36sa74QGVbfk=</string>
     <key>SUEnableAutomaticChecks</key><true/>

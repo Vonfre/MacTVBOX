@@ -26,7 +26,7 @@ final class ConfigurationTests: XCTestCase {
         """)
         XCTAssertEqual(config.sources.count, 2)
         XCTAssertTrue(config.warnings.contains { $0.contains("2 处") })
-        XCTAssertTrue(config.warnings.contains { $0.contains("没有原生支持") })
+        XCTAssertTrue(config.warnings.contains { $0.contains("没有已适配") })
     }
     func testQuotedContentNotRepaired() throws {
         let config = try parse(#"{"sites":[{"key":"a","name":"literal\next\": string","type":1,"api":"https://example.com"}]}"#)

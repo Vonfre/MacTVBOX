@@ -33,6 +33,7 @@ typealias SearchHit = SourceMatch
     @Published var configurationAddress = URLTools.defaultConfiguration
     @Published var customSources: [Source] = []
     @Published var bridgeBindings: [String: String] = [:]
+    private var didStart = false
     @Published var selectedSourceID: String?
     @Published var favorites: [SavedVideo] = []
     @Published var history: [SavedVideo] = []
@@ -93,8 +94,8 @@ typealias SearchHit = SourceMatch
     private var persistenceURL: URL
     var sources: [Source] {
         (customSources + (configuration?.sources ?? [])).map { original in
-            var source = original
-            source.bridgeURL = bridgeBindings[source.key + "|" + source.api]
+            var source = SourcePersistence.sanitized(original)
+            source.bridgeURL = SourcePersistence.validBinding(bridgeBindings[source.key + "|" + source.api]) ?? source.bridgeURL
             return source
         }
     }
@@ -110,9 +111,9 @@ typealias SearchHit = SourceMatch
                 let saved = try JSONDecoder().decode(LibrarySnapshot.self, from: Data(contentsOf: persistenceURL))
                 configuration = saved.configuration; configurationAddress = saved.configurationAddress
                 customSources = saved.customSources; selectedSourceID = saved.selectedSourceID
-                favorites = saved.favorites; history = saved.history
+                favorites = saved.favorites.map(SourcePersistence.sanitized); history = saved.history.map(SourcePersistence.sanitized)
                 rankingProvider = saved.rankingProvider ?? .douban
-                bridgeBindings = saved.bridgeBindings ?? [:]
+                bridgeBindings = (saved.bridgeBindings ?? [:]).filter { !SourcePersistence.isRetiredEndpoint($0.value) }
             }
         } catch { self.error = "读取本地资料失败，原文件未删除：\(error.localizedDescription)" }
     }
@@ -122,6 +123,7 @@ typealias SearchHit = SourceMatch
         catch { self.error = "保存本地资料失败：\(error.localizedDescription)" }
     }
     func start() {
+        guard !didStart else { return }; didStart = true
         browse()
         // v0.1 snapshots discarded ext. Refresh the existing subscription without losing user data.
         if configuration == nil || configuration?.sources.contains(where: { $0.api == "csp_AppGet" && $0.ext == nil }) == true {
@@ -152,10 +154,12 @@ typealias SearchHit = SourceMatch
             let values = try url.resourceValues(forKeys: [.fileSizeKey])
             guard (values.fileSize ?? 0) <= 8 * 1024 * 1024 else { throw TVError.message("配置文件超过 8 MB。") }
             let config = try ConfigurationParser.parse(Data(contentsOf: url))
-            configuration = config; selectedSourceID = preferredSource?.id ?? sources.first?.id
-            persist(); resetBrowse()
-            info = "已从本地导入 \(config.sources.count) 个源。"
-            browse()
+            Task {
+                configuration = config; selectedSourceID = preferredSource?.id ?? sources.first?.id
+                persist(); resetBrowse()
+                info = "已从本地导入 \(config.sources.count) 个源。"
+                browse()
+            }
         } catch { self.error = friendlyError(error) }
     }
     func addSource(name: String, address: String, type: Int) throws {
@@ -200,19 +204,22 @@ typealias SearchHit = SourceMatch
         guard !candidates.isEmpty else { error = "没有已适配的可搜索片源，请先导入配置。"; isLoading = false; return }
         isLoading = true
         browseTask = Task {
-            await withTaskGroup(of: (Source, [Video], String?).self) { group in
-                var remaining = candidates.makeIterator()
-                func enqueue(_ source: Source) {
+            await withTaskGroup(of: ([Source], [Video], String?).self) { group in
+                var remaining = SourceSearch.groups(candidates).makeIterator()
+                func enqueue(_ sources: [Source]) {
+                    guard let source = sources.first else { return }
                     group.addTask {
-                        do { return (source, try await self.client.browse(source: source, query: keyword).videos, nil) }
-                        catch { return (source, [], error.localizedDescription) }
+                        do { return (sources, try await self.client.browse(source: source, query: keyword).videos, nil) }
+                        catch { return (sources, [], error.localizedDescription) }
                     }
                 }
                 for _ in 0..<3 { if let source = remaining.next() { enqueue(source) } }
-                for await (source, items, failure) in group {
+                for await (sources, items, failure) in group {
                     guard !Task.isCancelled, self.browseRevision == revision else { group.cancelAll(); return }
-                    self.searchHits.append(contentsOf: items.map { SearchHit(video: $0, source: source) })
-                    if let failure { self.searchFailures.append("\(source.name)：\(failure)") }
+                    for source in sources {
+                        self.searchHits.append(contentsOf: items.map { SearchHit(video: $0, source: source) })
+                    }
+                    if let failure { self.searchFailures.append("\(sources.map(\.name).joined(separator: " / "))：\(failure)") }
                     if let source = remaining.next() { enqueue(source) }
                 }
             }
@@ -252,38 +259,45 @@ typealias SearchHit = SourceMatch
     }
     func showTitle(_ video: Video, matches: [SourceMatch] = [], subjectURL: URL? = nil) {
         closeDetail()
+        // The title sheet owns matching now; do not keep the background aggregate
+        // search competing with detail / playback for runtime requests.
+        browseTask?.cancel(); browseRevision = UUID(); isLoading = false
         detailAnchor = video; detailVideo = video; detailSubjectURL = subjectURL
         detailMatches = matches; matchingFailures = []; matchingCompleted = 0
-        let candidates = supportedSources.filter(\.searchable)
+        let role = matches.first?.source.contentRole ?? .video
+        let candidates = supportedSources.filter { $0.searchable && $0.contentRole == role }
         matchingTotal = candidates.count; isMatching = !candidates.isEmpty
         let revision = UUID(); matchRevision = revision
         matchTask = Task {
-            await withTaskGroup(of: (Source, [Video], String?).self) { group in
-                var remaining = candidates.makeIterator()
-                func enqueue(_ source: Source) {
+            await withTaskGroup(of: ([Source], [Video], String?).self) { group in
+                var remaining = SourceSearch.groups(candidates).makeIterator()
+                func enqueue(_ sources: [Source]) {
+                    guard let source = sources.first else { return }
                     group.addTask {
-                        do { return (source, try await self.client.browse(source: source, query: video.title).videos, nil) }
-                        catch { return (source, [], error.localizedDescription) }
+                        do { return (sources, try await self.client.browse(source: source, query: video.title).videos, nil) }
+                        catch { return (sources, [], error.localizedDescription) }
                     }
                 }
                 for _ in 0..<3 { if let source = remaining.next() { enqueue(source) } }
-                for await (source, items, failure) in group {
+                for await (sources, items, failure) in group {
                     guard !Task.isCancelled, matchRevision == revision else { group.cancelAll(); return }
-                    matchingCompleted += 1
-                    for item in items {
-                        let match = SourceMatch(video: item, source: source)
-                        if !detailMatches.contains(where: { $0.id == match.id }) { detailMatches.append(match) }
+                    matchingCompleted += sources.count
+                    for source in sources {
+                        for item in items {
+                            let match = SourceMatch(video: item, source: source)
+                            if !detailMatches.contains(where: { $0.id == match.id }) { detailMatches.append(match) }
+                        }
                     }
-                    if let failure { matchingFailures.append("\(source.name)：\(failure)") }
+                    if let failure { matchingFailures.append("\(sources.map(\.name).joined(separator: " / "))：\(failure)") }
                     if let source = remaining.next() { enqueue(source) }
                 }
             }
             if matchRevision == revision { isMatching = false }
         }
     }
-    func showDetail(_ video: Video, source: Source) {
-        let current = sources.first(where: { $0.key == source.key && $0.api == source.api }) ?? source
-        showTitle(video, matches: [SourceMatch(video: video, source: current)])
+    func showDetail(_ video: Video, source original: Source) {
+        let source = sources.first { $0.key == original.key && $0.api == original.api } ?? SourcePersistence.sanitized(original)
+        showTitle(video, matches: [SourceMatch(video: video, source: source)])
     }
     func selectMatch(_ match: SourceMatch) {
         detailTask?.cancel()
@@ -310,7 +324,7 @@ typealias SearchHit = SourceMatch
     }
     func isFavorite(_ video: Video, source: Source) -> Bool { favorites.contains { $0.id == SavedVideo(video: video, source: source).id } }
     func toggleFavorite(_ video: Video, source: Source) {
-        let saved = SavedVideo(video: video, source: source)
+        let saved = SavedVideo(video: video, source: SourcePersistence.sanitized(source))
         if favorites.contains(where: { $0.id == saved.id }) { favorites.removeAll { $0.id == saved.id } }
         else { favorites.insert(saved, at: 0) }
         persist()
@@ -324,7 +338,7 @@ typealias SearchHit = SourceMatch
         historyDeletionGuard.beginPlayback(id: SavedVideo(video: video, source: source).id)
     }
     func record(_ video: Video, source: Source, episode: Episode, position: Double) {
-        let saved = SavedVideo(video: video, source: source, episode: episode, position: max(0, position.isFinite ? position : 0))
+        let saved = SavedVideo(video: video, source: SourcePersistence.sanitized(source), episode: episode, position: max(0, position.isFinite ? position : 0))
         guard historyDeletionGuard.allowsRecording(id: saved.id) else { return }
         history.removeAll { $0.id == saved.id }; history.insert(saved, at: 0)
         history = Array(history.prefix(100)); persist()

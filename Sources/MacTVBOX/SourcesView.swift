@@ -8,8 +8,12 @@ struct SourcesView: View {
     @State private var filter = ""
     @State private var onlySupported = false
     @State private var bridgeSource: Source?
+    @State private var diagnosticSource: Source?
+    @State private var catalogSource: Source?
+    @State private var catalogSelection: SourceMatch?
+    @State private var requirement: SourceRequirement?
     private var filteredSources: [Source] {
-        store.sources.filter { (!onlySupported || $0.isSupported) && (filter.isEmpty || $0.name.localizedCaseInsensitiveContains(filter) || $0.api.localizedCaseInsensitiveContains(filter)) }
+        store.sources.filter { (!onlySupported || $0.isSupported) && (requirement == nil || $0.requirement == requirement) && (filter.isEmpty || $0.name.localizedCaseInsensitiveContains(filter) || $0.api.localizedCaseInsensitiveContains(filter)) }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 25) {
@@ -31,7 +35,7 @@ struct SourcesView: View {
                     }.buttonStyle(PrimaryButton()).disabled(store.isImporting)
                     Button("本地文件") { showFile = true }.buttonStyle(QuietButton())
                 }
-                Text("只读取配置，不执行 JAR、JavaScript、网页脚本或广告过滤规则。HTTP 配置采用明文传输，请确认来源可信。").font(.system(size: 11)).foregroundStyle(Theme.muted).lineSpacing(4)
+                Text("仅读取片源配置，不下载或执行远程 JAR / DEX。原生适配直接在 Mac 上运行，无需 Android。HTTP 配置为明文传输，请确认来源可信。").font(.system(size: 11)).foregroundStyle(Theme.muted).lineSpacing(4)
                 if let configuration = store.configuration {
                     ForEach(Array(configuration.warnings.enumerated()), id: \.offset) { _, warning in
                         Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(.orange.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
@@ -41,15 +45,28 @@ struct SourcesView: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "puzzlepiece.extension").foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("运行时扩展").font(.system(size: 14, weight: .semibold))
-                    Text("支持 TVBox type=4 HTTP 接口。对未适配的 Spider / JS 源，可连接你已部署的兼容服务。没有内置 Android / Node 运行时；连接成功也不代表上游资源一定可播放。")
+                    Text("macOS 原生片源").font(.system(size: 14, weight: .semibold))
+                    Text("内置荐片、瓜子、Jpys、AppGet / RJ / Qi、B站、动漫84，以及预告片、音乐、少儿、科普和赛事原生适配，不启动模拟器。默认仍按影片匹配来源；专项内容单独归类。搜索失效时可浏览目录，协议支持不保证每条线路可播。")
                         .font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }.padding(18).background(Theme.panel).clipShape(RoundedRectangle(cornerRadius: 12))
             HStack(spacing: 14) {
                 statistic("\(store.sources.count)", "已导入片源", "square.stack.3d.up")
                 statistic("\(store.supportedSources.count)", "已适配协议", "checkmark.shield")
-                statistic("\(store.sources.count - store.supportedSources.count)", "需要额外适配", "puzzlepiece.extension")
+                statistic("\(store.sources.count - store.supportedSources.count)", "其他入口 / 待适配", "puzzlepiece.extension")
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button("全部") { requirement = nil; onlySupported = false }.buttonStyle(QuietButton())
+                    ForEach(SourceRequirement.allCases, id: \.self) { item in
+                        let count = store.sources.filter { $0.requirement == item }.count
+                        if count > 0 {
+                            Button("\(item.rawValue) \(count)") { requirement = requirement == item ? nil : item; onlySupported = false }
+                                .buttonStyle(QuietButton()).tint(requirement == item ? Theme.accent : Theme.muted)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(requirement == item ? Theme.accent : .clear))
+                        }
+                    }
+                }
             }
             HStack {
                 Text("全部片源").font(.system(size: 17, weight: .semibold))
@@ -58,7 +75,7 @@ struct SourcesView: View {
                 TextField("筛选片源…", text: $filter).textFieldStyle(.roundedBorder).frame(width: 180)
             }
             if filteredSources.isEmpty {
-                ContentUnavailable(icon: "externaldrive", title: store.sources.isEmpty ? "尚未导入片源" : "没有匹配的片源", message: "支持 XML / JSON 及 csp_AppGet 原生协议；其他插件保留并注明所需运行时。")
+                ContentUnavailable(icon: "externaldrive", title: store.sources.isEmpty ? "尚未导入片源" : "没有匹配的片源", message: "可导入标准 XML / JSON 或受支持的原生 Spider 配置；其他入口显示待适配原因。")
             }
             LazyVStack(spacing: 9) {
                 ForEach(filteredSources) { source in
@@ -72,10 +89,12 @@ struct SourcesView: View {
                         }
                         Spacer()
                         if source.isSupported {
-                            Badge(text: source.searchable ? "参与影片搜索" : "源未开放搜索")
-                        } else { Text("未接入").font(.system(size: 11)).foregroundStyle(.orange.opacity(0.8)) }
-                        if source.type == 3 {
-                            Button(source.bridgeURL == nil ? "连接运行时" : "管理连接") { bridgeSource = source }.buttonStyle(QuietButton())
+                            Button("浏览内容") { catalogSource = source }.buttonStyle(QuietButton())
+                            Button("检测接入") { diagnosticSource = source }.buttonStyle(QuietButton())
+                            Badge(text: source.searchable ? (source.contentRole == .video ? "参与影片搜索" : "专项内容搜索") : "源未开放搜索")
+                        } else { Text(source.requirement.rawValue).font(.system(size: 11)).foregroundStyle(.orange.opacity(0.8)) }
+                        if source.type == 3 && (source.nativeSpider == nil || source.bridgeURL != nil) {
+                            Button(source.bridgeURL == nil ? "外部服务" : "管理连接") { bridgeSource = source }.buttonStyle(QuietButton())
                         }
                         if store.customSources.contains(where: { $0.id == source.id }) {
                             Button { store.removeSource(source) } label: { Image(systemName: "trash").foregroundStyle(Theme.muted) }.buttonStyle(IconButton()).accessibilityLabel("移除此片源")
@@ -84,6 +103,12 @@ struct SourcesView: View {
                 }
             }
         }
+        .sheet(item: $catalogSource, onDismiss: {
+            if let selected = catalogSelection { catalogSelection = nil; store.showDetail(selected.video, source: selected.source) }
+        }) { source in
+            SourceCatalogSheet(source: source) { catalogSelection = SourceMatch(video: $0, source: source) }
+        }
+        .sheet(item: $diagnosticSource) { source in SourceDiagnosticsSheet(source: source) }
         .sheet(item: $bridgeSource) { source in RuntimeBridgeSheet(source: source).environmentObject(store) }
         .fileImporter(isPresented: $showFile, allowedContentTypes: [.json, .plainText]) { result in
             switch result { case .success(let url): store.importFile(url); case .failure(let error): store.error = error.localizedDescription }

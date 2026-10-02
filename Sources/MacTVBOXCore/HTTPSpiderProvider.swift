@@ -1,7 +1,7 @@
 import Foundation
 
 /// TVBox type=4 / drpy-node style HTTP contract. The server owns its runtime;
-/// MacTVBOX never downloads a JAR or evaluates remote JavaScript.
+/// Managed Android execution is isolated in a separate emulator, never in this process.
 public struct HTTPSpiderProvider {
     let client: TVClient
     let source: Source
@@ -35,6 +35,7 @@ public struct HTTPSpiderProvider {
               var root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw TVError.message("运行时返回的不是 TVBox HTTP JSON。")
         }
+        try rejectBridgeError(root)
         // Home responses may contain only class. Never turn an arbitrary error into an empty page.
         if root["list"] == nil, root["class"] is [[String: Any]] { root["list"] = [[String: Any]]() }
         let normalized = try JSONSerialization.data(withJSONObject: root)
@@ -61,11 +62,15 @@ public struct HTTPSpiderProvider {
     public static func parsePlayer(_ data: Data) throws -> ResolvedMedia {
         guard data.count <= 2 * 1024 * 1024,
               let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw TVError.message("运行时播放响应无效。") }
+        try rejectBridgeError(root)
         guard ConfigurationParser.scalar(root["parse"]) == "0",
               root["jx"] == nil || ConfigurationParser.scalar(root["jx"]) == "0" else {
             throw TVError.message("运行时返回网页嗅探 / 二次解析任务，而非媒体直链。请让服务端完成解析并返回 parse=0；本机不会执行网页脚本或绕过验证。")
         }
-        let url = try URLTools.httpURL(ConfigurationParser.scalar(root["url"]))
+        let address = ConfigurationParser.scalar(root["url"])
+        guard !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw TVError.message("插件执行完成，但上游返回空播放地址。此线路当前不可用，请尝试其他线路；这不是缺少 Android 运行时。") }
+        guard ConfigurationParser.scalar(root["playUrl"]).isEmpty else { throw TVError.message("此线路仍需网页二次解析，尚未返回可供播放器使用的媒体地址。") }
+        let url = try URLTools.httpURL(address)
         guard !["html", "htm"].contains(url.pathExtension.lowercased()) else { throw TVError.message("运行时返回了网页，不是媒体直链。") }
         var headerObject: Any? = root["header"] ?? root["headers"]
         if let text = headerObject as? String { headerObject = try JSONSerialization.jsonObject(with: Data(text.utf8)) }
@@ -84,4 +89,8 @@ public struct HTTPSpiderProvider {
         }
         return ResolvedMedia(url: url, headers: headers)
     }
+    private static func rejectBridgeError(_ root: [String: Any]) throws {
+        if let message = root["bridge_error"] as? String { throw TVError.message(String(message.prefix(600))) }
+    }
+
 }
